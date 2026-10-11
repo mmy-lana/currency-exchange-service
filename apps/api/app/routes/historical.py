@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Query, HTTPException
 from app.core.redis import get_redis_client
@@ -10,7 +11,9 @@ from app.models.schemas import (
 )
 from app.services.cache_manager import HistoricalCacheManager
 
-router = APIRouter(prefix="/v1", tags=["Historical Analytics"])
+logger = logging.getLogger("currency-exchange.historical")
+
+router = APIRouter(tags=["Historical Analytics"])
 
 
 @router.get("/rates/historical", response_model=BaseApiResponse[HistoricalRatesModel])
@@ -27,10 +30,12 @@ async def get_historical_rates(
             target=target.value,
             range_str=time_range.value
         )
-    except Exception as exc:
+    except Exception:
+        # Sanitized error contract: exception internals stay server-side.
+        logger.exception("Historical series unavailable for %s/%s (%s)", base.value, target.value, time_range.value)
         raise HTTPException(
             status_code=503,
-            detail={"code": "HISTORICAL_SERIES_UNAVAILABLE", "message": str(exc)}
+            detail={"code": "HISTORICAL_DATA_UNAVAILABLE", "message": "Historical rate data is temporarily unavailable."}
         )
 
     return BaseApiResponse[HistoricalRatesModel](

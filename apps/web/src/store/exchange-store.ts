@@ -9,6 +9,7 @@ interface ExchangeStoreState {
   isLoading: boolean;
   errorMessage: string | null;
   lastUpdated: number | null;
+  retryNonce: number;
   setFromCurrency: (currency: SupportedCurrency) => void;
   setToCurrency: (currency: SupportedCurrency) => void;
   setAmount: (amount: string) => void;
@@ -16,6 +17,7 @@ interface ExchangeStoreState {
   setConversionResult: (result: ConversionResult | null) => void;
   setIsLoading: (loading: boolean) => void;
   setErrorMessage: (msg: string | null) => void;
+  requestRetry: () => void;
 }
 
 export const useExchangeStore = create<ExchangeStoreState>((set, get) => ({
@@ -26,6 +28,7 @@ export const useExchangeStore = create<ExchangeStoreState>((set, get) => ({
   isLoading: false,
   errorMessage: null,
   lastUpdated: null,
+  retryNonce: 0,
 
   setFromCurrency: (fromCurrency) => {
     if (fromCurrency === get().toCurrency) {
@@ -62,4 +65,8 @@ export const useExchangeStore = create<ExchangeStoreState>((set, get) => ({
 
   setIsLoading: (isLoading) => set({ isLoading }),
   setErrorMessage: (errorMessage) => set({ errorMessage, isLoading: false }),
+  requestRetry: () => set((state) => ({
+    retryNonce: state.retryNonce + 1,
+    errorMessage: null,
+  })),
 }));

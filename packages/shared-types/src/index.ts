@@ -40,9 +40,15 @@ export interface ConversionResult {
   from: SupportedCurrency;
   to: SupportedCurrency;
   amount: number;
-  convertedAmount: number;
-  unitRate: number;
-  inverseUnitRate: number;
+  /**
+   * Exact decimal contract: convertedAmount, unitRate, and inverseUnitRate are
+   * string-quantized decimal representations emitted by the backend
+   * (ROUND_HALF_EVEN, 8dp rates, ISO-4217 minor-unit amounts). Format them via
+   * apps/web/src/lib/formatters.ts; do not perform arithmetic on raw floats.
+   */
+  convertedAmount: string;
+  unitRate: string;
+  inverseUnitRate: string;
   timestamp: number;
 }
 

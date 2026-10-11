@@ -1,6 +1,7 @@
+from decimal import Decimal
 from enum import Enum
 from typing import Dict, List, Optional, Generic, TypeVar
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 T = TypeVar("T")
 
@@ -29,7 +30,7 @@ class TimeRange(str, Enum):
 class ConversionQueryModel(BaseModel):
     from_currency: CurrencyCode = Field(..., alias="from")
     to_currency: CurrencyCode = Field(..., alias="to")
-    amount: float = Field(..., gt=0.0, description="Amount to be converted, strictly positive.")
+    amount: Decimal = Field(..., gt=Decimal("0.0"), description="Amount to be converted, strictly positive.")
 
     model_config = {
         "populate_by_name": True
@@ -43,12 +44,14 @@ class LiveRatesModel(BaseModel):
 
 
 class ConversionResultModel(BaseModel):
+    # Financial integrity invariant: monetary values and unit rates are serialized
+    # as exact string-quantized decimal representations, never IEEE-754 floats.
     from_currency: CurrencyCode = Field(..., alias="from")
     to_currency: CurrencyCode = Field(..., alias="to")
-    amount: float
-    converted_amount: float = Field(..., serialization_alias="convertedAmount")
-    unit_rate: float = Field(..., serialization_alias="unitRate")
-    inverse_unit_rate: float = Field(..., serialization_alias="inverseUnitRate")
+    amount: Decimal
+    converted_amount: str = Field(..., serialization_alias="convertedAmount")
+    unit_rate: str = Field(..., serialization_alias="unitRate")
+    inverse_unit_rate: str = Field(..., serialization_alias="inverseUnitRate")
     timestamp: int
 
     model_config = {
@@ -67,10 +70,10 @@ class HistoricalRatesModel(BaseModel):
     base: CurrencyCode
     target: CurrencyCode
     range: TimeRange
-    min_rate: float = Field(..., serialization_alias="minRate")
-    max_rate: float = Field(..., serialization_alias="maxRate")
-    average_rate: float = Field(..., serialization_alias="averageRate")
-    percentage_change: float = Field(..., serialization_alias="percentageChange")
+    min_rate: float = Field(..., validation_alias=AliasChoices("min_rate", "minRate"), serialization_alias="minRate")
+    max_rate: float = Field(..., validation_alias=AliasChoices("max_rate", "maxRate"), serialization_alias="maxRate")
+    average_rate: float = Field(..., validation_alias=AliasChoices("average_rate", "averageRate"), serialization_alias="averageRate")
+    percentage_change: float = Field(..., validation_alias=AliasChoices("percentage_change", "percentageChange"), serialization_alias="percentageChange")
     points: List[HistoricalRatePointModel]
 
     model_config = {

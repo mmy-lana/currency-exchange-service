@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { SUPPORTED_CURRENCIES, TimeRangeOption, CurrencyMetadata } from '@currency-exchange/shared-types';
 import { useExchangeStore } from './store/exchange-store';
 import { useExchangeRate } from './hooks/use-exchange-rate';
@@ -10,6 +10,8 @@ import { Badge } from './components/ui/Badge';
 import { CurrencySelector } from './components/ui/CurrencySelector';
 import { SkeletonLoader } from './components/ui/SkeletonLoader';
 import { InteractiveChart } from './components/charts/InteractiveChart';
+import { PlatformGuide, hasSeenPlatformGuide, markPlatformGuideSeen } from './components/guide/PlatformGuide';
+import { formatExactAmount, formatRate, formatRelativeAge } from './lib/formatters';
 
 const METADATA_CATALOG: Record<string, CurrencyMetadata> = {
   USD: { code: 'USD', name: 'US Dollar', symbol: '$', flagCode: 'US', decimalPlaces: 2 },
@@ -27,6 +29,28 @@ const METADATA_CATALOG: Record<string, CurrencyMetadata> = {
 
 const TIME_RANGES: TimeRangeOption[] = ['7D', '30D', '90D', '1Y'];
 
+interface ErrorAlertProps {
+  title: string;
+  description: string;
+  onRetry: () => void;
+}
+
+const ErrorAlert: React.FC<ErrorAlertProps> = ({ title, description, onRetry }) => (
+  <div
+    className="p-4 rounded-lg bg-[var(--color-fintech-surface)] border border-[var(--color-emerald-primary)] shadow-[0_0_15px_var(--color-emerald-glow)] flex flex-col gap-2"
+    role="alert"
+  >
+    <div className="flex items-center gap-2">
+      <span className="w-2 h-2 rounded-full bg-[var(--color-fintech-warning)]" aria-hidden="true" />
+      <span className="text-sm font-semibold text-[var(--color-fintech-text-primary)]">{title}</span>
+    </div>
+    <p className="text-xs font-mono text-[var(--color-fintech-text-secondary)]">{description}</p>
+    <Button type="button" variant="outline" onClick={onRetry} className="w-full sm:w-auto self-start mt-1">
+      Retry Request
+    </Button>
+  </div>
+);
+
 export default function App() {
   const {
     fromCurrency,
@@ -35,15 +59,42 @@ export default function App() {
     conversionResult,
     isLoading: isConverting,
     errorMessage: conversionError,
+    lastUpdated,
     setFromCurrency,
     setToCurrency,
     setAmount,
     swapCurrencies,
+    requestRetry,
   } = useExchangeStore();
 
   const [selectedRange, setSelectedRange] = useState<TimeRangeOption>('30D');
+  const [historicalRetryNonce, setHistoricalRetryNonce] = useState(0);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [nowTick, setNowTick] = useState(Date.now());
+  const copyResetHandle = useRef<number | null>(null);
 
   useExchangeRate();
+
+  useEffect(() => {
+    if (!hasSeenPlatformGuide()) {
+      setIsGuideOpen(true);
+      markPlatformGuideSeen();
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowTick(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (copyResetHandle.current !== null) {
+        window.clearTimeout(copyResetHandle.current);
+      }
+    };
+  }, []);
 
   const {
     data: historicalData,
@@ -53,18 +104,37 @@ export default function App() {
     base: fromCurrency,
     target: toCurrency,
     range: selectedRange,
+    retryNonce: historicalRetryNonce,
   });
+
+  const handleCopyConverted = async () => {
+    if (!conversionResult) return;
+    try {
+      await navigator.clipboard.writeText(
+        `${conversionResult.convertedAmount} ${toCurrency}`
+      );
+      setCopied(true);
+      if (copyResetHandle.current !== null) {
+        window.clearTimeout(copyResetHandle.current);
+      }
+      copyResetHandle.current = window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      // Clipboard permission unavailable: the confirmation badge simply stays hidden.
+    }
+  };
+
+  const closeGuide = () => setIsGuideOpen(false);
 
   return (
     <div className="min-h-screen bg-[var(--color-fintech-base)] text-[var(--color-fintech-text-primary)] font-sans antialiased">
       <header className="border-b border-[var(--color-fintech-border)] bg-[var(--color-fintech-surface)]">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[var(--color-emerald-muted)] border border-[var(--color-emerald-primary)] flex items-center justify-center">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 shrink-0 rounded-lg bg-[var(--color-emerald-muted)] border border-[var(--color-emerald-primary)] flex items-center justify-center">
               <span className="text-[var(--color-emerald-accent)] font-mono font-bold text-sm">$</span>
             </div>
-            <div>
-              <h1 className="text-base font-semibold tracking-tight text-[var(--color-fintech-text-primary)]">
+            <div className="min-w-0">
+              <h1 className="text-base font-semibold tracking-tight text-[var(--color-fintech-text-primary)] truncate">
                 FinTech FX Exchange
               </h1>
               <p className="text-xs font-mono text-[var(--color-fintech-text-secondary)] hidden sm:block">
@@ -72,8 +142,11 @@ export default function App() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="success">System Operational</Badge>
+          <div className="flex items-center gap-2 shrink-0">
+            <Badge variant="success" className="hidden sm:inline-flex">System Operational</Badge>
+            <Button type="button" variant="secondary" onClick={() => setIsGuideOpen(true)} className="px-3">
+              Platform Guide
+            </Button>
           </div>
         </div>
       </header>
@@ -98,6 +171,7 @@ export default function App() {
                   id="convert-amount"
                   label="Transfer Amount"
                   type="number"
+                  inputMode="decimal"
                   min="0.01"
                   step="any"
                   value={amount}
@@ -122,7 +196,7 @@ export default function App() {
                       type="button"
                       variant="secondary"
                       onClick={swapCurrencies}
-                      className="w-full sm:w-12 h-12 flex items-center justify-center p-0"
+                      className="w-full sm:w-12 min-h-[48px] flex items-center justify-center p-0"
                       aria-label="Swap Currencies"
                     >
                       <svg className="w-5 h-5 text-[var(--color-emerald-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -144,29 +218,57 @@ export default function App() {
                 </div>
 
                 {conversionError && (
-                  <div className="p-3 rounded-lg bg-rose-950/40 border border-rose-600/50 text-xs font-mono text-[var(--color-fintech-danger)]">
-                    {conversionError}
-                  </div>
+                  <ErrorAlert
+                    title="Conversion Unavailable"
+                    description={conversionError}
+                    onRetry={requestRetry}
+                  />
                 )}
 
                 <div className="mt-2 p-4 rounded-lg bg-[var(--color-fintech-surface)] border border-[var(--color-fintech-border)] flex flex-col gap-2">
-                  <span className="text-xs font-mono uppercase tracking-wider text-[var(--color-fintech-text-muted)]">
-                    Estimated Conversion
-                  </span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono uppercase tracking-wider text-[var(--color-fintech-text-muted)]">
+                      Estimated Conversion
+                    </span>
+                    {conversionResult && !isConverting && (
+                      <span className="text-xs font-mono text-[var(--color-fintech-text-secondary)]">
+                        {formatRelativeAge(conversionResult.timestamp, nowTick)}
+                      </span>
+                    )}
+                  </div>
                   {isConverting ? (
                     <SkeletonLoader height={36} />
                   ) : conversionResult ? (
-                    <div>
-                      <div className="text-2xl sm:text-3xl font-mono font-bold text-[var(--color-emerald-accent)]">
-                        {conversionResult.convertedAmount.toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 4,
-                        })}{' '}
-                        <span className="text-base text-[var(--color-fintech-text-secondary)]">{toCurrency}</span>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-2xl sm:text-3xl font-mono font-bold text-[var(--color-emerald-accent)] break-all">
+                          {formatExactAmount(conversionResult.convertedAmount, toCurrency)}{' '}
+                          <span className="text-base text-[var(--color-fintech-text-secondary)]">{toCurrency}</span>
+                        </div>
+                        <div className="text-xs font-mono text-[var(--color-fintech-text-secondary)] mt-1">
+                          1 {fromCurrency} = {formatRate(conversionResult.unitRate)} {toCurrency}
+                        </div>
                       </div>
-                      <div className="text-xs font-mono text-[var(--color-fintech-text-secondary)] mt-1">
-                        1 {fromCurrency} = {conversionResult.unitRate.toFixed(6)} {toCurrency}
-                      </div>
+                      <button
+                        type="button"
+                        onClick={handleCopyConverted}
+                        data-testid="copy-converted"
+                        aria-label="Copy converted amount"
+                        className="min-h-[48px] min-w-[48px] shrink-0 flex items-center justify-center rounded-lg border border-[var(--color-fintech-border)] text-[var(--color-fintech-text-secondary)] hover:text-[var(--color-emerald-accent)] hover:border-[var(--color-emerald-primary)] transition-colors"
+                      >
+                        {copied ? (
+                          <span className="flex items-center gap-1 text-xs font-mono text-[var(--color-emerald-accent)]">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                            </svg>
+                            Copied
+                          </span>
+                        ) : (
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        )}
+                      </button>
                     </div>
                   ) : (
                     <div className="text-sm font-mono text-[var(--color-fintech-text-muted)]">
@@ -196,7 +298,9 @@ export default function App() {
                       key={r}
                       type="button"
                       onClick={() => setSelectedRange(r)}
-                      className={`min-h-[44px] px-3 text-xs font-mono font-medium rounded transition-colors touch-target ${
+                      data-testid={`range-${r}`}
+                      aria-pressed={selectedRange === r}
+                      className={`min-h-[48px] min-w-[48px] px-3 text-xs font-mono font-medium rounded transition-colors touch-target ${
                         selectedRange === r
                           ? 'bg-[var(--color-emerald-primary)] text-black font-semibold'
                           : 'text-[var(--color-fintech-text-secondary)] hover:text-[var(--color-fintech-text-primary)]'
@@ -218,9 +322,11 @@ export default function App() {
                   <SkeletonLoader height={280} />
                 </div>
               ) : historicalError ? (
-                <div className="p-4 rounded-lg bg-rose-950/40 border border-rose-600/50 text-sm font-mono text-[var(--color-fintech-danger)]">
-                  {historicalError}
-                </div>
+                <ErrorAlert
+                  title="Historical Data Unavailable"
+                  description={`${historicalError} The upstream timeseries authority may be unreachable. Retry to request a fresh series.`}
+                  onRetry={() => setHistoricalRetryNonce((n) => n + 1)}
+                />
               ) : historicalData ? (
                 <div className="flex flex-col gap-4">
                   <div className="grid grid-cols-3 gap-3">
@@ -251,6 +357,8 @@ export default function App() {
           </div>
         </div>
       </main>
+
+      <PlatformGuide open={isGuideOpen} onClose={closeGuide} />
     </div>
   );
 }

@@ -1,5 +1,7 @@
+import logging
 import time
 from datetime import datetime, timezone
+from decimal import Decimal, ROUND_HALF_EVEN
 from fastapi import APIRouter, Depends, HTTPException, Query
 from app.core.redis import get_redis_client
 from app.models.schemas import (
@@ -11,9 +13,16 @@ from app.models.schemas import (
 from app.services.aggregator import UpstreamRateAggregator
 from app.services.rate_engine import RateEngine
 
-router = APIRouter(prefix="/v1", tags=["Exchange Engine"])
+logger = logging.getLogger("currency-exchange.convert")
 
+router = APIRouter(tags=["Exchange Engine"])
+
+# Note: _aggregator_singleton is safe at module scope only while UpstreamRateAggregator.__init__
+# remains stateless. Move initialization to a FastAPI lifespan handler if stateful connection pools are added.
 _aggregator_singleton = UpstreamRateAggregator()
+
+# ISO-4217 minor-unit exponents for quantization of final converted amounts.
+CURRENCY_MINOR_UNITS = {"JPY": 0}
 
 
 def get_aggregator() -> UpstreamRateAggregator:
@@ -24,7 +33,7 @@ def get_aggregator() -> UpstreamRateAggregator:
 async def convert_currency(
     from_currency: CurrencyCode = Query(..., alias="from"),
     to_currency: CurrencyCode = Query(..., alias="to"),
-    amount: float = Query(..., gt=0.0),
+    amount: Decimal = Query(..., gt=Decimal("0.0")),
     redis=Depends(get_redis_client),
     aggregator: UpstreamRateAggregator = Depends(get_aggregator)
 ):
@@ -35,25 +44,31 @@ async def convert_currency(
             from_currency=from_currency.value,
             to_currency=to_currency.value
         )
-    except ValueError as val_err:
+    except ValueError:
         raise HTTPException(
             status_code=422,
-            detail={"code": "UNSUPPORTED_CURRENCY_PAIR", "message": str(val_err)}
+            detail={"code": "UNSUPPORTED_CURRENCY_PAIR", "message": "Requested currency pair is not supported."}
         )
-    except Exception as exc:
+    except Exception:
+        # Financial and infrastructural integrity: raw exception text is never
+        # echoed to clients. Full context is logged server-side only.
+        logger.exception("Upstream rate resolution failed for pair %s/%s", from_currency.value, to_currency.value)
         raise HTTPException(
             status_code=503,
-            detail={"code": "UPSTREAM_RATE_UNAVAILABLE", "message": str(exc)}
+            detail={"code": "UPSTREAM_RATE_UNAVAILABLE", "message": "Exchange rate service is temporarily unavailable."}
         )
 
-    converted_amount = round(amount * unit_rate, 6)
+    converted_amount = (amount * Decimal(unit_rate)).quantize(
+        Decimal(1).scaleb(-CURRENCY_MINOR_UNITS.get(to_currency.value, 2)),
+        rounding=ROUND_HALF_EVEN
+    )
     timestamp_now = int(time.time() * 1000)
 
     result_payload = ConversionResultModel(
-        from=from_currency,
-        to=to_currency,
+        from_currency=from_currency,
+        to_currency=to_currency,
         amount=amount,
-        converted_amount=converted_amount,
+        converted_amount=str(converted_amount),
         unit_rate=unit_rate,
         inverse_unit_rate=inverse_rate,
         timestamp=timestamp_now

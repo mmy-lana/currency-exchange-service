@@ -9,5 +9,11 @@ _pool: aioredis.Redis | None = None
 async def get_redis_client() -> aioredis.Redis:
     global _pool
     if _pool is None:
-        _pool = aioredis.from_url(settings.REDIS_URL, decode_responses=False)
+        _pool = aioredis.from_url(
+            settings.REDIS_URL,
+            decode_responses=False,
+            socket_timeout=3.0,
+            socket_connect_timeout=3.0,
+            retry_on_timeout=True,
+        )
     return _pool

@@ -6,9 +6,11 @@ export interface UseHistoricalRatesProps {
   base: SupportedCurrency;
   target: SupportedCurrency;
   range: TimeRangeOption;
+  /** Incrementing nonce that forces a refetch (manual Retry Request action). */
+  retryNonce?: number;
 }
 
-export function useHistoricalRates({ base, target, range }: UseHistoricalRatesProps) {
+export function useHistoricalRates({ base, target, range, retryNonce = 0 }: UseHistoricalRatesProps) {
   const [data, setData] = useState<HistoricalRatesPayload | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +52,7 @@ export function useHistoricalRates({ base, target, range }: UseHistoricalRatesPr
     return () => {
       controller.abort();
     };
-  }, [base, target, range]);
+  }, [base, target, range, retryNonce]);
 
   return { data, isLoading, error };
 }

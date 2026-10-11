@@ -3,6 +3,7 @@ import json
 import logging
 import signal
 import time
+import uuid
 from typing import Optional
 import redis.asyncio as redis
 from app.core.config import settings
@@ -11,14 +12,26 @@ from app.services.aggregator import UpstreamRateAggregator
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s: %(message)s")
 logger = logging.getLogger("sync-worker")
 
+# Atomic lock release: the lock is deleted only when its stored value still
+# matches this worker's unique token, preventing premature release of a lease
+# that has already expired and been re-acquired by another process.
+RELEASE_LOCK_SCRIPT = """
+if redis.call("get", KEYS[1]) == ARGV[1] then
+    return redis.call("del", KEYS[1])
+else
+    return 0
+end
+"""
+
 
 async def run_sync_cycle(redis_client: redis.Redis, aggregator: UpstreamRateAggregator) -> Optional[bool]:
     lock_key = "lock:sync:USD"
+    token = str(uuid.uuid4())
     is_locked = False
 
     try:
         # redis-py returns True | None for SET NX; coerce to bool
-        is_locked = bool(await redis_client.set(lock_key, "locked", nx=True, ex=15))
+        is_locked = bool(await redis_client.set(lock_key, token, nx=True, ex=15))
         if not is_locked:
             logger.info("Another sync process owns the ingestion lease. Skipping interval.")
             return None
@@ -52,7 +65,10 @@ async def run_sync_cycle(redis_client: redis.Redis, aggregator: UpstreamRateAggr
         return False
     finally:
         if is_locked:
-            await redis_client.delete(lock_key)
+            try:
+                await redis_client.eval(RELEASE_LOCK_SCRIPT, 1, lock_key, token)
+            except Exception as release_err:
+                logger.error(f"Lock release failed (lease expires autonomously): {str(release_err)}")
 
 
 async def main():

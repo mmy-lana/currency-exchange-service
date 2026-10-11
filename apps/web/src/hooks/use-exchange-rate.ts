@@ -9,6 +9,7 @@ export function useExchangeRate() {
     fromCurrency,
     toCurrency,
     amount,
+    retryNonce,
     setConversionResult,
     setIsLoading,
     setErrorMessage,
@@ -58,5 +59,5 @@ export function useExchangeRate() {
       controller.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fromCurrency, toCurrency, amount]);
+  }, [fromCurrency, toCurrency, amount, retryNonce]);
 }

@@ -62,7 +62,7 @@ export const InteractiveChart: React.FC<InteractiveChartProps> = ({ points, heig
       </div>
 
       <div
-        className="relative w-full overflow-hidden touch-none"
+        className="relative w-full overflow-hidden touch-pan-y"
         onTouchMove={(e) => {
           const rect = e.currentTarget.getBoundingClientRect();
           handleTouchOrMove(e.touches[0].clientX, rect);
