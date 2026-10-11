@@ -1,0 +1,14 @@
+{
+  "extends": "@currency-exchange/tsconfig/base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": [
+      "DOM",
+      "DOM.Iterable",
+      "ESNext"
+    ]
+  },
+  "include": [
+    "src"
+  ]
+}

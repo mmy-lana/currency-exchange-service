@@ -1,0 +1,32 @@
+# Master Task Checklist
+
+- [ ] Task 1: Environment baseline, types, and DB client initializers
+  - [ ] Initialize Turborepo monorepo configuration with pnpm@latest and turbo@latest.
+  - [ ] Configure packages/shared-types with exchange, historical, and API response TypeScript definitions.
+  - [ ] Scaffold docker-compose.yml containing local Redis engine and volume persistence.
+  - [ ] Establish FastAPI foundation in apps/api with environment config validation, async Redis client setup, and health check routes.
+- [ ] Task 2: Core design system primitives and atomic UI components
+  - [ ] Set up Tailwind CSS v4 in apps/web with emerald-focused Fintech theme configuration.
+  - [ ] Construct base UI primitives: Button, Card, InputField, Badge, SkeletonLoader, CurrencySelector, and Sparkline.
+  - [ ] Enforce mobile-first touch target standards (minimum 48x48px on mobile) across 360px, 390px, 430px, 768px, and 1024px+ breakpoints.
+  - [ ] Build chart primitives using SVG/Canvas capable of rendering real-time sparklines and historical linear graphs.
+- [ ] Task 3: Live Exchange Rates & Conversion Engine end-to-end implementation
+  - [ ] Implement third-party rate fetcher in FastAPI with automatic fallback providers.
+  - [ ] Write Redis hash-caching layer with 120-second automatic expiration and fallback recovery.
+  - [ ] Build /v1/convert endpoint with Pydantic payload validation and serialization aliases.
+  - [ ] Implement responsive conversion interface in React with interactive amount inputs, currency swap mechanism, and useExchangeRate hook.
+- [ ] Task 4: Historical Trends & Analytics Charting end-to-end implementation
+  - [ ] Implement historical timeseries ingestion and Redis caching strategy for 7D, 30D, 90D, and 1Y ranges.
+  - [ ] Build /v1/rates/historical endpoint supporting base/target queries and downsampled trends.
+  - [ ] Develop interactive analytics module in React featuring emerald trendlines, high/low/average badges, and interval selectors.
+  - [ ] Add mobile touch-scrubbing support for chart points with floating metric cards.
+- [ ] Task 5: Background Worker & Cache Invalidation Pipeline end-to-end implementation
+  - [ ] Implement standalone Python worker process for polling external exchange rate vendors every 60 seconds.
+  - [ ] Implement atomic cache updates in Redis with distributed locking to prevent duplicate upstream calls.
+  - [ ] Build worker monitoring and circuit-breaker pattern to handle external vendor rate degradation or HTTP 429 errors.
+  - [ ] Wire dead-letter logging for failed sync executions to queue:deadletter:sync.
+- [ ] Task 6: Routing shell, responsive page assembly, and production build verification
+  - [ ] Assemble dashboard view combining conversion calculator, real-time rate ticker, and historical analytics chart.
+  - [ ] Test layout across 360px, 390px, 430px, 768px, and 1024px+ viewports.
+  - [ ] Validate containerized build outputs: Koyeb-ready Dockerfile for FastAPI and static build artifacts for Vercel.
+  - [ ] Verify reproducible requirements lockfile generation via pip-tools prior to final deployment gating.

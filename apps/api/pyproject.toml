@@ -1,0 +1,18 @@
+[project]
+name = "currency-exchange-api"
+version = "0.0.0"
+description = "High-throughput currency and exchange rate microservice"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi",
+  "uvicorn",
+  "pydantic",
+  "pydantic-settings",
+  "httpx",
+  "redis",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
