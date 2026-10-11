@@ -20,11 +20,11 @@
   - [x] Build /v1/rates/historical endpoint supporting base/target queries and downsampled trends.
   - [x] Develop interactive analytics module in React featuring emerald trendlines, high/low/average badges, and interval selectors.
   - [x] Add mobile touch-scrubbing support for chart points with floating metric cards.
-- [ ] Task 5: Background Worker & Cache Invalidation Pipeline end-to-end implementation
-  - [ ] Implement standalone Python worker process for polling external exchange rate vendors every 60 seconds.
-  - [ ] Implement atomic cache updates in Redis with distributed locking to prevent duplicate upstream calls.
-  - [ ] Build worker monitoring and circuit-breaker pattern to handle external vendor rate degradation or HTTP 429 errors.
-  - [ ] Wire dead-letter logging for failed sync executions to queue:deadletter:sync.
+- [x] Task 5: Background Worker & Cache Invalidation Pipeline end-to-end implementation
+  - [x] Implement standalone Python worker process for polling external exchange rate vendors every 60 seconds.
+  - [x] Implement atomic cache updates in Redis with distributed locking to prevent duplicate upstream calls.
+  - [x] Build worker monitoring and circuit-breaker pattern to handle external vendor rate degradation or HTTP 429 errors.
+  - [x] Wire dead-letter logging for failed sync executions to queue:deadletter:sync.
 - [ ] Task 6: Routing shell, responsive page assembly, and production build verification
   - [ ] Assemble dashboard view combining conversion calculator, real-time rate ticker, and historical analytics chart.
   - [ ] Test layout across 360px, 390px, 430px, 768px, and 1024px+ viewports.
