@@ -5,11 +5,11 @@
   - [x] Configure packages/shared-types with exchange, historical, and API response TypeScript definitions.
   - [x] Scaffold docker-compose.yml containing local Redis engine and volume persistence.
   - [x] Establish FastAPI foundation in apps/api with environment config validation, async Redis client setup, and health check routes.
-- [ ] Task 2: Core design system primitives and atomic UI components
-  - [ ] Set up Tailwind CSS v4 in apps/web with emerald-focused Fintech theme configuration.
-  - [ ] Construct base UI primitives: Button, Card, InputField, Badge, SkeletonLoader, CurrencySelector, and Sparkline.
-  - [ ] Enforce mobile-first touch target standards (minimum 48x48px on mobile) across 360px, 390px, 430px, 768px, and 1024px+ breakpoints.
-  - [ ] Build chart primitives using SVG/Canvas capable of rendering real-time sparklines and historical linear graphs.
+- [x] Task 2: Core design system primitives and atomic UI components
+  - [x] Set up Tailwind CSS v4 in apps/web with emerald-focused Fintech theme configuration.
+  - [x] Construct base UI primitives: Button, Card, InputField, Badge, SkeletonLoader, CurrencySelector, and Sparkline.
+  - [x] Enforce mobile-first touch target standards (minimum 48x48px on mobile) across 360px, 390px, 430px, 768px, and 1024px+ breakpoints.
+  - [x] Build chart primitives using SVG/Canvas capable of rendering real-time sparklines and historical linear graphs.
 - [ ] Task 3: Live Exchange Rates & Conversion Engine end-to-end implementation
   - [ ] Implement third-party rate fetcher in FastAPI with automatic fallback providers.
   - [ ] Write Redis hash-caching layer with 120-second automatic expiration and fallback recovery.
