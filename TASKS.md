@@ -1,10 +1,10 @@
 # Master Task Checklist
 
-- [ ] Task 1: Environment baseline, types, and DB client initializers
-  - [ ] Initialize Turborepo monorepo configuration with pnpm@latest and turbo@latest.
-  - [ ] Configure packages/shared-types with exchange, historical, and API response TypeScript definitions.
-  - [ ] Scaffold docker-compose.yml containing local Redis engine and volume persistence.
-  - [ ] Establish FastAPI foundation in apps/api with environment config validation, async Redis client setup, and health check routes.
+- [x] Task 1: Environment baseline, types, and DB client initializers
+  - [x] Initialize Turborepo monorepo configuration with pnpm@latest and turbo@latest.
+  - [x] Configure packages/shared-types with exchange, historical, and API response TypeScript definitions.
+  - [x] Scaffold docker-compose.yml containing local Redis engine and volume persistence.
+  - [x] Establish FastAPI foundation in apps/api with environment config validation, async Redis client setup, and health check routes.
 - [ ] Task 2: Core design system primitives and atomic UI components
   - [ ] Set up Tailwind CSS v4 in apps/web with emerald-focused Fintech theme configuration.
   - [ ] Construct base UI primitives: Button, Card, InputField, Badge, SkeletonLoader, CurrencySelector, and Sparkline.

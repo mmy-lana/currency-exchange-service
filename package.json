@@ -11,5 +11,6 @@
   "devDependencies": {
     "turbo": "latest",
     "typescript": "latest"
-  }
+  },
+  "packageManager": "pnpm@11.22.0"
 }
