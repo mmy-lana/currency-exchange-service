@@ -12,20 +12,20 @@ interface GuideStep {
 
 const GUIDE_STEPS: GuideStep[] = [
   {
-    title: 'USD Base Anchor Engine',
-    body: 'All supported currencies are anchored to USD tick data cached at the edge. Cross-rates such as EUR to JPY are resolved in a single triangular pass through the anchor, delivering sub-millisecond conversions without extra upstream calls.',
+    title: 'System Architecture & USD Anchor',
+    body: 'The US Dollar acts as the central base currency for all 11 supported fiat currencies. Every cross-rate, such as EUR to JPY, is resolved through the USD anchor in a single triangular pass, so conversions complete in sub-millisecond time without chaining multiple vendor calls.',
   },
   {
-    title: 'Live Currency Converter',
-    body: 'Enter any transfer amount and the engine recalculates after a 300ms debounce, cancelling stale in-flight requests automatically. Use the swap button between the two selectors to reverse the conversion direction instantly.',
+    title: 'Conversion Engine & Debounce',
+    body: 'Amount input is debounced for 300ms before a conversion request is issued, and any in-flight request is cancelled the moment you keep typing. Press Alt+S anywhere to instantly swap the From and To currencies, and use the copy button to capture the converted result.',
   },
   {
-    title: 'Historical Trends and Scrubbing',
-    body: 'Switch between 7D, 30D, 90D, and 1Y timeframes to inspect daily close trajectories. Drag or move your pointer across the chart to scrub individual data points and read the exact rate and date in the header above the trendline.',
+    title: 'Historical Analytics & Touch Scrubbing',
+    body: 'Select the 7D, 30D, 90D, or 1Y timeframe to inspect daily close trajectories. Drag or move your pointer across the chart canvas to scrub individual data points; the chart uses touch-pan-y so vertical page scrolling is never trapped. High, average, and low statistics sit above the trendline.',
   },
   {
-    title: 'System Status Indicators',
-    body: 'Live Edge Cache means rates are served from the 120-second Redis cache. Syncing indicates a fresh upstream fetch is in flight. Degraded means the upstream authority is unreachable; retry manually once connectivity is restored.',
+    title: 'Financial Precision & Security',
+    body: 'Rates are computed with exact decimal semantics and string-quantized before transport, eliminating IEEE-754 floating-point drift entirely. Token-bucket rate limiting protects shared capacity so the service stays available and responsive for every client.',
   },
 ];
 

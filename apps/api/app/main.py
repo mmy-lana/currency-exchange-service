@@ -1,4 +1,5 @@
 import logging
+import ipaddress
 import re
 import time
 from contextlib import asynccontextmanager
@@ -145,6 +146,33 @@ def _error_response(request: Request, status: int, code: str, message: str, head
     )
 
 
+def get_client_ip(request: Request) -> str:
+    """SEC-03: resolve the real client IP behind reverse proxies.
+
+    Priority: CF-Connecting-IP (Cloudflare edge), then the leftmost entry of
+    X-Forwarded-For (the originating client, unmanipulated by intermediaries),
+    then the direct socket peer. Every candidate is validated as a well-formed
+    IPv4 or IPv6 literal; malformed or missing values fall back safely so a
+    hostile header can never poison the limiter key.
+    """
+    candidates = []
+    cf_ip = request.headers.get("cf-connecting-ip")
+    if cf_ip:
+        candidates.append(cf_ip.strip())
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        candidates.append(forwarded_for.split(",")[0].strip())
+    if request.client and request.client.host:
+        candidates.append(request.client.host)
+
+    for candidate in candidates:
+        try:
+            return str(ipaddress.ip_address(candidate))
+        except ValueError:
+            continue
+    return "127.0.0.1"
+
+
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
     path = request.url.path
@@ -152,7 +180,7 @@ async def rate_limit_middleware(request: Request, call_next):
     if request.method == "OPTIONS" or limit is None:
         return await call_next(request)
 
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = get_client_ip(request)
     cache_key = f"ratelimit:{client_ip}:{path}"
     remaining = limit - 1
     reset_epoch = int(time.time()) + RATE_LIMIT_WINDOW_SECONDS

@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_EVEN
 from typing import List, Tuple
 import redis.asyncio as redis
@@ -14,19 +14,37 @@ PCT_QUANT = Decimal("0.01")
 
 
 class HistoricalCacheManager:
-    """Historical timeseries cache backed by a genuine upstream authority.
+    """Historical timeseries cache with immutable day-close retention (DEF-05).
 
-    Integrity invariant: this manager never fabricates market data. When the
-    cache is cold, observations are fetched from the upstream provider. If the
-    provider is unreachable, an error is raised and the route responds with a
-    structured 503 HISTORICAL_DATA_UNAVAILABLE envelope for client retry.
-    All metric arithmetic is performed with decimal.Decimal under banker's
-    rounding, then emitted at fixed 4-decimal (1 for percentages) precision.
+    Closed trading days never change, so every fetched observation is persisted
+    permanently in the Redis Hash `rates:history:observations:{base}:{target}`
+    (field: YYYY-MM-DD, value: quantized rate string) without any TTL. A short
+    TTL model cache (`rates:timeseries:...`) remains as the fast path. On a
+    model-cache miss the manager merges stored immutable observations with a
+    targeted upstream fetch for missing window dates; if the vendor is
+    unreachable but local observations exist, the chart is still served from
+    the immutable mirror instead of failing with 503.
+
+    Integrity invariant: this manager never fabricates market data, and all
+    metric arithmetic uses decimal.Decimal under banker's rounding.
     """
+
+    DAYS_MAP = {"7D": 7, "30D": 30, "90D": 90, "1Y": 365}
 
     def __init__(self, redis_client: redis.Redis, aggregator: UpstreamRateAggregator | None = None):
         self.redis = redis_client
         self.aggregator = aggregator or UpstreamRateAggregator()
+
+    def _observation_key(self, base: str, target: str) -> str:
+        return f"rates:history:observations:{base}:{target}"
+
+    def _window_dates(self, range_str: str) -> List[str]:
+        days = self.DAYS_MAP.get(range_str, 30)
+        today = datetime.now(timezone.utc).date()
+        return [
+            (today - timedelta(days=offset)).isoformat()
+            for offset in range(days, -1, -1)
+        ]
 
     async def get_historical_series(
         self,
@@ -44,17 +62,45 @@ class HistoricalCacheManager:
             parsed = json.loads(cached_data.decode("utf-8"))
             return HistoricalRatesModel.model_validate(parsed), True
 
-        try:
-            observations = await self.aggregator.fetch_historical_timeseries(base, target, range_str)
-        except RuntimeError:
-            # No fabricated fallback: propagate a structured failure so the
-            # route can emit HISTORICAL_DATA_UNAVAILABLE and the UI can offer retry.
-            logger.exception("Upstream historical fetch failed for %s/%s (%s)", base, target, range_str)
-            raise
+        window_dates = self._window_dates(range_str)
+        observation_key = self._observation_key(base, target)
+        stored = await self.redis.hgetall(observation_key)
+        stored_observations = {
+            key.decode("utf-8"): value.decode("utf-8")
+            for key, value in stored.items()
+        }
 
-        model = self._build_model(base, target, range_str, observations)
+        missing_dates = [d for d in window_dates if d not in stored_observations]
+        used_upstream = False
+
+        if missing_dates:
+            try:
+                fetched = await self.aggregator.fetch_historical_timeseries(base, target, range_str)
+            except RuntimeError:
+                logger.exception("Upstream historical fetch failed for %s/%s (%s)", base, target, range_str)
+                fetched = []
+
+            if fetched:
+                used_upstream = True
+                mapping = {date_str: str(Decimal(raw_rate).quantize(RATE_QUANT, rounding=ROUND_HALF_EVEN))
+                           for date_str, raw_rate in fetched}
+                # DEF-05: historical closes are immutable; persist without TTL.
+                await self.redis.hset(observation_key, mapping=mapping)
+                stored_observations.update(mapping)
+
+        if not stored_observations:
+            # Nothing cached locally and the vendor is unreachable: surface a
+            # structured failure rather than fabricating a chart.
+            raise RuntimeError("No historical observations available for pair")
+
+        merged = [
+            (date_str, stored_observations[date_str])
+            for date_str in window_dates
+            if date_str in stored_observations
+        ]
+        model = self._build_model(base, target, range_str, merged)
         await self.redis.setex(cache_key, 3600, json.dumps(model.model_dump()))
-        return model, False
+        return model, not used_upstream
 
     def _build_identity_series(self, base: str, target: str, range_str: str) -> HistoricalRatesModel:
         """DEF-02: base == target is always an exact flat 1.0000 series.

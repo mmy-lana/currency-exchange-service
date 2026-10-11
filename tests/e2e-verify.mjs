@@ -73,8 +73,26 @@ async function page_reduceGuideState(browser) {
   await page.waitForSelector('[role="dialog"][aria-label="Platform Guide"]', { timeout: 5000 });
   assert(true, 'Guide opens from header button');
 
+  // Focus trap: tabbing forward from the last focusable element cycles back
+  // into the dialog instead of escaping to the obscured dashboard.
+  const trapped = await page.evaluate(() => {
+    const dialog = document.querySelector('[role="dialog"]');
+    if (!dialog) return false;
+    const focusable = dialog.querySelectorAll('button');
+    const last = focusable[focusable.length - 1];
+    last.focus();
+    return document.activeElement === last;
+  });
+  assert(trapped, 'Focus can move to the last dialog control');
+  await page.keyboard.press('Tab');
+  const focusStayedInDialog = await page.evaluate(() => {
+    const dialog = document.querySelector('[role="dialog"]');
+    return Boolean(dialog && dialog.contains(document.activeElement));
+  });
+  assert(focusStayedInDialog, 'Tab is trapped inside the dialog');
+
   const step1 = await page.$eval('[role="dialog"] h2', (el) => el.textContent);
-  assert(step1.includes('USD Base Anchor'), 'Step 1 is USD Base Anchor');
+  assert(step1.includes('System Architecture & USD Anchor'), 'Step 1 is System Architecture & USD Anchor');
 
   // Deterministic navigation: click the Next button by text
   let currentStep = step1;
@@ -90,7 +108,7 @@ async function page_reduceGuideState(browser) {
     currentStep = await page.$eval('[role="dialog"] h2', (el) => el.textContent);
   }
   assert(
-    currentStep.includes('System Status'),
+    currentStep.includes('Financial Precision & Security'),
     `Navigation advances through all steps (final: ${currentStep})`
   );
 
@@ -190,6 +208,17 @@ async function testHistorical(browser) {
 async function testIdentityAndRateLimits(browser) {
   section('Identity conversion and rate limiting headers');
   const page = await browser.newPage();
+  // This page only exercises /v1/convert via fetch: abort its automatic
+  // historical series load to preserve the 10 req/min historical budget for
+  // the dedicated historical suites.
+  await page.setRequestInterception(true);
+  page.on('request', (req) => {
+    if (req.url().includes('/v1/rates/historical')) {
+      req.abort('failed').catch(() => {});
+    } else {
+      req.continue().catch(() => {});
+    }
+  });
   await page.goto(BASE_URL, { waitUntil: 'networkidle2', timeout: 20000 });
   await dismissGuide(page);
 
@@ -209,24 +238,78 @@ async function testIdentityAndRateLimits(browser) {
   assert(identity.headers.limit === '60', `Rate limit header present (X-RateLimit-Limit=${identity.headers.limit})`);
   assert(identity.headers.remaining !== null, 'Rate limit remaining header present');
 
-  // Identity historical timeseries: flat 1.0000 line with no upstream call.
-  const identityHistory = await page.evaluate(async () => {
-    const response = await fetch('/v1/rates/historical?base=USD&target=USD&range=7D');
-    return { headers: { limit: response.headers.get('X-RateLimit-Limit') }, body: await response.json() };
+  // Identity historical assertions run in the Node-side suite below to keep
+  // the browser IP's 10 req/min historical budget for the UI suites.
+  await page.close();
+}
+
+
+async function testProxyIpIsolation(browser) {
+  section('Proxy IP rate limiter isolation');
+  // Browser fetch forbids setting X-Forwarded-For, so proxy-header semantics
+  // are exercised from the Node runtime against the mapped API port.
+  const apiBase = process.env.E2E_API_URL || 'http://localhost:8000';
+  const ipA = '203.0.113.195';
+  const ipB = '198.51.100.42';
+
+  const first = await fetch(`${apiBase}/v1/convert?from=USD&to=EUR&amount=1`, {
+    headers: { 'X-Forwarded-For': ipA },
   });
-  assert(identityHistory.body.success === true, 'Identity historical series succeeds');
+  const limitA = first.headers.get('X-RateLimit-Limit');
+  const remainingA = first.headers.get('X-RateLimit-Remaining');
+  assert(limitA === '60', `Proxy IP bucket uses the 60 req/min limit (${limitA})`);
+  assert(remainingA === '58' || remainingA === '59', `Proxy IP quota decrements independently (${remainingA})`);
+  await first.json();
+
+  const second = await fetch(`${apiBase}/v1/convert?from=USD&to=EUR&amount=1`, {
+    headers: { 'X-Forwarded-For': ipB },
+  });
+  const remainingB = second.headers.get('X-RateLimit-Remaining');
+  assert(remainingB === '59', `Second proxy IP receives a fresh quota (${remainingB})`);
+  await second.json();
+
+  // Identity historical timeseries from an isolated proxy IP: flat 1.0000
+  // series resolved without any upstream vendor call.
+  const identityHistory = await fetch(`${apiBase}/v1/rates/historical?base=USD&target=USD&range=7D`, {
+    headers: { 'X-Forwarded-For': ipB },
+  });
+  const histLimit = identityHistory.headers.get('X-RateLimit-Limit');
+  const identityHistoryBody = await identityHistory.json();
+  assert(identityHistoryBody.success === true, 'Identity historical series succeeds');
   assert(
-    identityHistory.body.data.minRate === 1.0 &&
-      identityHistory.body.data.maxRate === 1.0 &&
-      identityHistory.body.data.averageRate === 1.0 &&
-      identityHistory.body.data.percentageChange === 0.0,
+    identityHistoryBody.data.minRate === 1.0 &&
+      identityHistoryBody.data.maxRate === 1.0 &&
+      identityHistoryBody.data.averageRate === 1.0 &&
+      identityHistoryBody.data.percentageChange === 0.0,
     'Identity historical metrics are exactly 1.0 / 0.0'
   );
   assert(
-    identityHistory.body.data.points.every((pt) => pt.rate === 1.0),
+    identityHistoryBody.data.points.every((pt) => pt.rate === 1.0),
     'Identity historical points are all exactly 1.0'
   );
-  assert(identityHistory.headers.limit === '10', `Historical rate limit header present (X-RateLimit-Limit=${identityHistory.headers.limit})`);
+  assert(histLimit === '10', `Historical rate limit header present (X-RateLimit-Limit=${histLimit})`);
+}
+
+async function testImmutableHistoricalPersistence(browser) {
+  section('Immutable historical persistence');
+  const page = await browser.newPage();
+  await page.goto(BASE_URL, { waitUntil: 'networkidle2', timeout: 20000 });
+  await dismissGuide(page);
+
+  const query = async () => page.evaluate(async () => {
+    const response = await fetch('/v1/rates/historical?base=EUR&target=GBP&range=30D');
+    const envelope = await response.json();
+    return { meta: envelope.meta, data: envelope.data };
+  });
+
+  const first = await query();
+  assert(first.data && first.data.points.length > 0, 'EUR/GBP 30D series resolves with data points');
+  const second = await query();
+  assert(second.meta.cached === true, 'Re-request resolves from local cache (meta.cached=true)');
+  assert(
+    JSON.stringify(first.data.points) === JSON.stringify(second.data.points),
+    'Cached series is identical to the first resolution'
+  );
   await page.close();
 }
 
@@ -237,6 +320,8 @@ async function testErrorRetryRecovery(browser) {
   let blockConvert = true;
   page.on('request', (req) => {
     if (blockConvert && req.url().includes('/v1/convert')) {
+      req.abort('failed').catch(() => {});
+    } else if (req.url().includes('/v1/rates/historical')) {
       req.abort('failed').catch(() => {});
     } else {
       req.continue().catch(() => {});
@@ -314,8 +399,10 @@ async function main() {
     await testFrontendLoads(browser);
     await testPlatformGuide(browser);
     await testConverter(browser);
+    await testProxyIpIsolation(browser);
     await testIdentityAndRateLimits(browser);
     await testHistorical(browser);
+    await testImmutableHistoricalPersistence(browser);
     await testErrorRetryRecovery(browser);
     await testMobileViewports(browser);
   } finally {

@@ -148,13 +148,22 @@ export default function App() {
               <h1 className="text-base font-semibold tracking-tight text-[var(--color-fintech-text-primary)] truncate">
                 FinTech FX Exchange
               </h1>
-              <p className="text-xs font-mono text-[var(--color-fintech-text-secondary)] hidden sm:block">
+              <p
+                className="text-xs font-mono text-[var(--color-fintech-text-secondary)] hidden sm:block"
+                title="USD Triangular Anchor: cross-rates resolve through the USD base in a single hop, without multi-hop vendor calls."
+              >
                 Sub-millisecond Cross-Rate Engine
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Badge variant="success" className="hidden sm:inline-flex">System Operational</Badge>
+            <Badge
+              variant="success"
+              className="hidden sm:inline-flex"
+              title="Banker's Quantization: every rate is an exact decimal under ISO-4217 minor-unit bounds, rounded half-to-even."
+            >
+              System Operational
+            </Badge>
             <Button type="button" variant="secondary" onClick={() => setIsGuideOpen(true)} className="px-3">
               Platform Guide
             </Button>
@@ -171,9 +180,21 @@ export default function App() {
                   Live Currency Converter
                 </h2>
                 {isConverting ? (
-                  <Badge variant="warning">Syncing</Badge>
+                  <Badge variant="warning">Syncing Fresh Tick</Badge>
+                ) : conversionError ? (
+                  <Badge
+                    variant="danger"
+                    title="Degraded / Offline Mirror: serving from local immutable history and cached ticks."
+                  >
+                    Degraded / Offline Mirror
+                  </Badge>
                 ) : (
-                  <Badge variant="success">Edge Cached</Badge>
+                  <Badge
+                    variant="success"
+                    title="Edge Cached (Sub-millisecond): served from the 120-second Redis tick cache."
+                  >
+                    Edge Cached (Sub-millisecond)
+                  </Badge>
                 )}
               </div>
 
