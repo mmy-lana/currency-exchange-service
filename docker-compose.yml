@@ -49,7 +49,7 @@ services:
       - VITE_API_URL=
       - VITE_PROXY_TARGET=http://api:8000
       - CI=true
-    command: sh -c "corepack enable && pnpm install --frozen-lockfile --ignore-scripts && pnpm --filter web dev --host"
+    command: sh -c "corepack enable && pnpm install --frozen-lockfile --ignore-scripts --store-dir /tmp/pnpm-store && pnpm --filter web dev --host"
     depends_on:
       - api
     restart: unless-stopped
