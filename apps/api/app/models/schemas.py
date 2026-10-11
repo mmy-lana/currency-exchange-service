@@ -30,7 +30,15 @@ class TimeRange(str, Enum):
 class ConversionQueryModel(BaseModel):
     from_currency: CurrencyCode = Field(..., alias="from")
     to_currency: CurrencyCode = Field(..., alias="to")
-    amount: Decimal = Field(..., gt=Decimal("0.0"), description="Amount to be converted, strictly positive.")
+    amount: Decimal = Field(
+        ...,
+        gt=Decimal("0.0"),
+        le=Decimal("1000000000000.00"),
+        description=(
+            "Amount to be converted, strictly positive and capped at one "
+            "trillion minor units to bound quantization work."
+        ),
+    )
 
     model_config = {
         "populate_by_name": True

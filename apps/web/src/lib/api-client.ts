@@ -10,12 +10,20 @@ const BASE_URL = import.meta.env.VITE_API_URL || '';
 
 const REQUEST_TIMEOUT_MS = 8000;
 
+export class TimeoutError extends Error {
+  code = 'REQUEST_TIMEOUT';
+  constructor() {
+    super(`Request timed out after ${REQUEST_TIMEOUT_MS / 1000} seconds. Please check connection and retry.`);
+    this.name = 'TimeoutError';
+  }
+}
+
 export async function fetchJson<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
   const timeoutController = new AbortController();
-  const timeoutHandle = setTimeout(() => timeoutController.abort(), REQUEST_TIMEOUT_MS);
+  const timeoutHandle = setTimeout(() => timeoutController.abort(new TimeoutError()), REQUEST_TIMEOUT_MS);
 
   // Compose the caller's signal with the timeout boundary: aborting either
   // signal cancels the request.
@@ -58,6 +66,13 @@ export async function fetchJson<T>(
     }
 
     return envelope.data;
+  } catch (err: unknown) {
+    // Timeout aborts carry the TimeoutError reason: rethrow it so callers can
+    // distinguish an 8s timeout from an intentional debounce cancellation.
+    if (timeoutController.signal.aborted && err instanceof DOMException && err.name === 'AbortError') {
+      throw new TimeoutError();
+    }
+    throw err;
   } finally {
     clearTimeout(timeoutHandle);
   }

@@ -17,3 +17,11 @@ async def get_redis_client() -> aioredis.Redis:
             retry_on_timeout=True,
         )
     return _pool
+
+
+async def close_redis_client() -> None:
+    """Release the shared connection pool during application shutdown."""
+    global _pool
+    if _pool is not None:
+        await _pool.aclose()
+        _pool = None

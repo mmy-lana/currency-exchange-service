@@ -186,13 +186,102 @@ async function testHistorical(browser) {
   await page.close();
 }
 
+
+async function testIdentityAndRateLimits(browser) {
+  section('Identity conversion and rate limiting headers');
+  const page = await browser.newPage();
+  await page.goto(BASE_URL, { waitUntil: 'networkidle2', timeout: 20000 });
+  await dismissGuide(page);
+
+  // Identity conversion via the same-origin API path: exact 1:1 semantics.
+  const identity = await page.evaluate(async () => {
+    const response = await fetch('/v1/convert?from=USD&to=USD&amount=10000');
+    return {
+      headers: {
+        limit: response.headers.get('X-RateLimit-Limit'),
+        remaining: response.headers.get('X-RateLimit-Remaining'),
+      },
+      body: await response.json(),
+    };
+  });
+  assert(identity.body.data.unitRate === '1.00000000', 'Identity unit rate is exactly 1.00000000');
+  assert(identity.body.data.convertedAmount === '10000.00', 'Identity converted amount equals input');
+  assert(identity.headers.limit === '60', `Rate limit header present (X-RateLimit-Limit=${identity.headers.limit})`);
+  assert(identity.headers.remaining !== null, 'Rate limit remaining header present');
+
+  // Identity historical timeseries: flat 1.0000 line with no upstream call.
+  const identityHistory = await page.evaluate(async () => {
+    const response = await fetch('/v1/rates/historical?base=USD&target=USD&range=7D');
+    return { headers: { limit: response.headers.get('X-RateLimit-Limit') }, body: await response.json() };
+  });
+  assert(identityHistory.body.success === true, 'Identity historical series succeeds');
+  assert(
+    identityHistory.body.data.minRate === 1.0 &&
+      identityHistory.body.data.maxRate === 1.0 &&
+      identityHistory.body.data.averageRate === 1.0 &&
+      identityHistory.body.data.percentageChange === 0.0,
+    'Identity historical metrics are exactly 1.0 / 0.0'
+  );
+  assert(
+    identityHistory.body.data.points.every((pt) => pt.rate === 1.0),
+    'Identity historical points are all exactly 1.0'
+  );
+  assert(identityHistory.headers.limit === '10', `Historical rate limit header present (X-RateLimit-Limit=${identityHistory.headers.limit})`);
+  await page.close();
+}
+
+async function testErrorRetryRecovery(browser) {
+  section('Error boundary and retry recovery');
+  const page = await browser.newPage();
+  await page.setRequestInterception(true);
+  let blockConvert = true;
+  page.on('request', (req) => {
+    if (blockConvert && req.url().includes('/v1/convert')) {
+      req.abort('failed').catch(() => {});
+    } else {
+      req.continue().catch(() => {});
+    }
+  });
+
+  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 20000 });
+  await new Promise((r) => setTimeout(r, 2500));
+  const dlg = await page.$('[role="dialog"]');
+  if (dlg) {
+    await page.keyboard.press('Escape');
+    await new Promise((r) => setTimeout(r, 300));
+  }
+
+  const sawError = await page.waitForFunction(
+    () => document.body.innerText.includes('Conversion Unavailable') && document.body.innerText.includes('Retry Request'),
+    { timeout: 10000 }
+  ).then(() => true).catch(() => false);
+  assert(sawError, 'Degraded state renders error alert with Retry Request button');
+
+  blockConvert = false;
+  await page.evaluate(() => {
+    const buttons = [...document.querySelectorAll('button')];
+    const retry = buttons.find((b) => b.textContent.trim() === 'Retry Request');
+    if (retry) retry.click();
+  });
+  const recovered = await page.waitForFunction(
+    () => Boolean(document.querySelector('[data-testid="copy-converted"]')),
+    { timeout: 10000 }
+  ).then(() => true).catch(() => false);
+  assert(recovered, 'Retry Request recovers into a successful conversion');
+  await page.close();
+}
+
 async function testMobileViewports(browser) {
   section('Mobile viewports');
-  for (const viewport of MOBILE_VIEWPORTS) {
+  {
     const page = await browser.newPage();
-    await page.setViewport(viewport);
     await page.goto(BASE_URL, { waitUntil: 'networkidle2', timeout: 20000 });
     await dismissGuide(page);
+    for (const viewport of MOBILE_VIEWPORTS) {
+      // Resize the same page instead of reloading: keeps the per-IP historical
+      // request budget intact while revalidating layout at every viewport.
+      await page.setViewport(viewport);
+      await new Promise((r) => setTimeout(r, 400));
 
     const scrollOk = await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth + 1
@@ -209,6 +298,7 @@ async function testMobileViewports(browser) {
         });
     });
     assert(targetsOk, `${viewport.width}x${viewport.height}: all interactive targets meet min size`);
+    }
     await page.close();
   }
 }
@@ -224,7 +314,9 @@ async function main() {
     await testFrontendLoads(browser);
     await testPlatformGuide(browser);
     await testConverter(browser);
+    await testIdentityAndRateLimits(browser);
     await testHistorical(browser);
+    await testErrorRetryRecovery(browser);
     await testMobileViewports(browser);
   } finally {
     await browser.close();

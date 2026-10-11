@@ -9,7 +9,7 @@ importers:
   .:
     devDependencies:
       puppeteer:
-        specifier: ^25.13.0
+        specifier: latest
         version: 25.13.0
       turbo:
         specifier: latest

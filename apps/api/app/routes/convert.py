@@ -33,7 +33,7 @@ def get_aggregator() -> UpstreamRateAggregator:
 async def convert_currency(
     from_currency: CurrencyCode = Query(..., alias="from"),
     to_currency: CurrencyCode = Query(..., alias="to"),
-    amount: Decimal = Query(..., gt=Decimal("0.0")),
+    amount: Decimal = Query(..., gt=Decimal("0.0"), le=Decimal("1000000000000.00")),
     redis=Depends(get_redis_client),
     aggregator: UpstreamRateAggregator = Depends(get_aggregator)
 ):

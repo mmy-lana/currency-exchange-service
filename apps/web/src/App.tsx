@@ -89,6 +89,17 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if (event.altKey && (event.key === 's' || event.key === 'S')) {
+        event.preventDefault();
+        swapCurrencies();
+      }
+    };
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
+  }, [swapCurrencies]);
+
+  useEffect(() => {
     return () => {
       if (copyResetHandle.current !== null) {
         window.clearTimeout(copyResetHandle.current);
@@ -332,19 +343,19 @@ export default function App() {
                   <div className="grid grid-cols-3 gap-3">
                     <div className="p-3 bg-[var(--color-fintech-surface)] border border-[var(--color-fintech-border)] rounded-lg">
                       <div className="text-xs font-mono text-[var(--color-fintech-text-muted)]">LOW</div>
-                      <div className="text-sm sm:text-base font-mono font-semibold text-[var(--color-fintech-text-primary)]">
+                      <div className="text-xs sm:text-base font-mono font-semibold text-[var(--color-fintech-text-primary)] truncate min-w-0">
                         {historicalData.minRate.toFixed(4)}
                       </div>
                     </div>
                     <div className="p-3 bg-[var(--color-fintech-surface)] border border-[var(--color-fintech-border)] rounded-lg">
                       <div className="text-xs font-mono text-[var(--color-fintech-text-muted)]">AVERAGE</div>
-                      <div className="text-sm sm:text-base font-mono font-semibold text-[var(--color-fintech-text-primary)]">
+                      <div className="text-xs sm:text-base font-mono font-semibold text-[var(--color-fintech-text-primary)] truncate min-w-0">
                         {historicalData.averageRate.toFixed(4)}
                       </div>
                     </div>
                     <div className="p-3 bg-[var(--color-fintech-surface)] border border-[var(--color-fintech-border)] rounded-lg">
                       <div className="text-xs font-mono text-[var(--color-fintech-text-muted)]">HIGH</div>
-                      <div className="text-sm sm:text-base font-mono font-semibold text-[var(--color-emerald-accent)]">
+                      <div className="text-xs sm:text-base font-mono font-semibold text-[var(--color-emerald-accent)] truncate min-w-0">
                         {historicalData.maxRate.toFixed(4)}
                       </div>
                     </div>

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 export interface PlatformGuideProps {
   open: boolean;
@@ -57,6 +57,32 @@ export const PlatformGuide: React.FC<PlatformGuideProps> = ({ open, onClose }) =
     }
   }, [open]);
 
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+
+  // Focus trapping: Tab cycles inside the dialog while it is open so keyboard
+  // users cannot scroll into the obscured dashboard behind the backdrop.
+  const handleTrapKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Tab' || !dialogRef.current) return;
+    const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
+      'button:not([disabled])'
+    );
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    dialogRef.current?.querySelector<HTMLElement>('button')?.focus();
+  }, [open, stepIndex]);
+
   if (!open) return null;
 
   const step = GUIDE_STEPS[stepIndex];
@@ -65,13 +91,15 @@ export const PlatformGuide: React.FC<PlatformGuideProps> = ({ open, onClose }) =
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-3 sm:p-6"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-3 sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-label="Platform Guide"
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
+        onKeyDown={handleTrapKeyDown}
         className="w-full max-w-md bg-[var(--color-fintech-card)] border border-[var(--color-fintech-border-bright)] rounded-xl shadow-[0_0_40px_var(--color-emerald-glow)] p-5 sm:p-6 flex flex-col gap-4"
         onClick={(e) => e.stopPropagation()}
       >

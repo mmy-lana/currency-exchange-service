@@ -10,7 +10,20 @@ from app.services.aggregator import UpstreamRateAggregator
 # Never import rate_engine inside aggregator to avoid circular dependency deadlocks.
 
 RATE_QUANT = Decimal("0.00000001")
+IDENTITY_RATE = Decimal("1.00000000")
 RATE_CONTEXT_PREC = 28
+
+# Atomic single-flight lock release: identical contract to the sync worker.
+# The lock is deleted only when its stored value still matches the acquiring
+# token, so a worker whose lease outlived the TTL can never delete a lock
+# re-acquired by another process.
+RELEASE_LOCK_SCRIPT = """
+if redis.call("get", KEYS[1]) == ARGV[1] then
+    return redis.call("del", KEYS[1])
+else
+    return 0
+end
+"""
 
 
 class RateEngine:
@@ -78,7 +91,7 @@ class RateEngine:
             )
         finally:
             if acquired:
-                await self.redis.delete(lock_key)
+                await self.redis.eval(RELEASE_LOCK_SCRIPT, 1, lock_key, token)
 
     async def get_rate_pair(self, from_currency: str, to_currency: str) -> Tuple[str, str, bool]:
         """Return quantized (unit_rate, inverse_rate, is_cached) as exact strings."""
@@ -87,7 +100,9 @@ class RateEngine:
             ctx.rounding = ROUND_HALF_EVEN
 
             if from_currency == to_currency:
-                return str(RATE_QUANT), str(RATE_QUANT), True
+                # FIN-01: identity conversion is an exact 1:1 rate, never the
+                # quantum epsilon.
+                return str(IDENTITY_RATE), str(IDENTITY_RATE), True
 
             payload, is_cached = await self._load_fresh_rates()
 

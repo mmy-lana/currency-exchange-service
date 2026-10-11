@@ -34,6 +34,9 @@ class HistoricalCacheManager:
         target: str,
         range_str: str
     ) -> Tuple[HistoricalRatesModel, bool]:
+        if base == target:
+            return self._build_identity_series(base, target, range_str), True
+
         cache_key = f"rates:timeseries:{base}:{target}:{range_str}"
         cached_data = await self.redis.get(cache_key)
 
@@ -52,6 +55,35 @@ class HistoricalCacheManager:
         model = self._build_model(base, target, range_str, observations)
         await self.redis.setex(cache_key, 3600, json.dumps(model.model_dump()))
         return model, False
+
+    def _build_identity_series(self, base: str, target: str, range_str: str) -> HistoricalRatesModel:
+        """DEF-02: base == target is always an exact flat 1.0000 series.
+
+        Short-circuits without any upstream call: an identity pair carries no
+        market information, so fabricating nothing and querying vendors for it
+        would only produce upstream HTTP errors.
+        """
+        days_map = {"7D": 7, "30D": 30, "90D": 90, "1Y": 365}
+        days = days_map.get(range_str, 30)
+        now = int(datetime.now(timezone.utc).timestamp())
+        points = [
+            HistoricalRatePointModel(
+                date=datetime.fromtimestamp(now - (i * 86400), tz=timezone.utc).date().isoformat(),
+                timestamp=(now - (i * 86400)) * 1000,
+                rate=1.0,
+            )
+            for i in range(days, -1, -1)
+        ]
+        return HistoricalRatesModel(
+            base=base,
+            target=target,
+            range=TimeRange(range_str),
+            min_rate=1.0,
+            max_rate=1.0,
+            average_rate=1.0,
+            percentage_change=0.0,
+            points=points,
+        )
 
     def _build_model(
         self,
