@@ -25,8 +25,8 @@
   - [x] Implement atomic cache updates in Redis with distributed locking to prevent duplicate upstream calls.
   - [x] Build worker monitoring and circuit-breaker pattern to handle external vendor rate degradation or HTTP 429 errors.
   - [x] Wire dead-letter logging for failed sync executions to queue:deadletter:sync.
-- [ ] Task 6: Routing shell, responsive page assembly, and production build verification
-  - [ ] Assemble dashboard view combining conversion calculator, real-time rate ticker, and historical analytics chart.
-  - [ ] Test layout across 360px, 390px, 430px, 768px, and 1024px+ viewports.
-  - [ ] Validate containerized build outputs: Koyeb-ready Dockerfile for FastAPI and static build artifacts for Vercel.
-  - [ ] Verify reproducible requirements lockfile generation via pip-tools prior to final deployment gating.
+- [x] Task 6: Routing shell, responsive page assembly, and production build verification
+  - [x] Assemble dashboard view combining conversion calculator, real-time rate ticker, and historical analytics chart.
+  - [x] Test layout across 360px, 390px, 430px, 768px, and 1024px+ viewports.
+  - [x] Validate containerized build outputs: Koyeb-ready Dockerfile for FastAPI and static build artifacts for Vercel.
+  - [x] Verify reproducible requirements lockfile generation via pip-tools prior to final deployment gating.

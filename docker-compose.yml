@@ -19,8 +19,26 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - API_V1_PREFIX=/v1
       - PROJECT_NAME=Currency & Exchange Microservice
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./apps/api/app:/app/app
     depends_on:
       - redis
+    restart: unless-stopped
+
+  web:
+    image: node:22-alpine
+    container_name: currency-web
+    working_dir: /repo
+    volumes:
+      - .:/repo
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    command: sh -c "corepack enable && pnpm install --frozen-lockfile && pnpm --filter web dev --host"
+    depends_on:
+      - api
     restart: unless-stopped
 
 volumes:

@@ -34,3 +34,8 @@ ENV/
 Thumbs.db
 
 repomix-output.xml
+# Python tooling artifacts
+.venv/
+.home/
+.piptools-cache/
+__pycache__/
