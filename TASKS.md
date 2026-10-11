@@ -10,11 +10,11 @@
   - [x] Construct base UI primitives: Button, Card, InputField, Badge, SkeletonLoader, CurrencySelector, and Sparkline.
   - [x] Enforce mobile-first touch target standards (minimum 48x48px on mobile) across 360px, 390px, 430px, 768px, and 1024px+ breakpoints.
   - [x] Build chart primitives using SVG/Canvas capable of rendering real-time sparklines and historical linear graphs.
-- [ ] Task 3: Live Exchange Rates & Conversion Engine end-to-end implementation
-  - [ ] Implement third-party rate fetcher in FastAPI with automatic fallback providers.
-  - [ ] Write Redis hash-caching layer with 120-second automatic expiration and fallback recovery.
-  - [ ] Build /v1/convert endpoint with Pydantic payload validation and serialization aliases.
-  - [ ] Implement responsive conversion interface in React with interactive amount inputs, currency swap mechanism, and useExchangeRate hook.
+- [x] Task 3: Live Exchange Rates & Conversion Engine end-to-end implementation
+  - [x] Implement third-party rate fetcher in FastAPI with automatic fallback providers.
+  - [x] Write Redis hash-caching layer with 120-second automatic expiration and fallback recovery.
+  - [x] Build /v1/convert endpoint with Pydantic payload validation and serialization aliases.
+  - [x] Implement responsive conversion interface in React with interactive amount inputs, currency swap mechanism, and useExchangeRate hook.
 - [ ] Task 4: Historical Trends & Analytics Charting end-to-end implementation
   - [ ] Implement historical timeseries ingestion and Redis caching strategy for 7D, 30D, 90D, and 1Y ranges.
   - [ ] Build /v1/rates/historical endpoint supporting base/target queries and downsampled trends.
